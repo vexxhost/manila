@@ -1,0 +1,24 @@
+# SPDX-FileCopyrightText: © 2026 VEXXHOST, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+FROM ghcr.io/vexxhost/openstack-venv-builder:main@sha256:423e0a09ce69554f25fd508ceff39945fd16f01a5f2c7cfeeb9cf15a1c18ad33 AS build
+RUN --mount=type=bind,target=/src/manila,readwrite <<EOF bash -xe
+uv pip install \
+    --constraint /upper-constraints.txt \
+        /src/manila
+EOF
+
+FROM ghcr.io/vexxhost/python-base:main@sha256:df0f7c05b006fbfa355077571a42745b36e610e674c8ca77f5ac8de2e0fd0fba
+RUN \
+    groupadd -g 42424 manila && \
+    useradd -u 42424 -g 42424 -M -d /var/lib/manila -s /usr/sbin/nologin -c "Manila User" manila && \
+    mkdir -p /etc/manila /var/log/manila /var/lib/manila /var/cache/manila && \
+    chown -Rv manila:manila /etc/manila /var/log/manila /var/lib/manila /var/cache/manila
+RUN <<EOF bash -xe
+apt-get update -qq
+apt-get install -qq -y --no-install-recommends \
+    iproute2 openvswitch-switch python3-ceph-argparse python3-rados
+apt-get clean
+rm -rf /var/lib/apt/lists/*
+EOF
+COPY --from=build --link /var/lib/openstack /var/lib/openstack
